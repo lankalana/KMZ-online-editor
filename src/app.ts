@@ -509,6 +509,11 @@ export class GeoreferenceController {
     }
     this.roughTableBody.innerHTML = "";
 
+    // Rough pairs only establish the linked viewport transform used in step 2.
+    // They do not contribute to the final thin-plate-spline overlay, so keep
+    // their markers out of the precise control-point workspace.
+    if (this.step !== 1) return;
+
     for (let i = 0; i < this.roughPairs.length; i++) {
       const pair = this.roughPairs[i];
       const label = String(i + 1);
