@@ -78,6 +78,19 @@ input[type="number"],
 input[type="range"] {
   width: 100%;
 }
+.checkbox-field {
+  justify-content: flex-start;
+}
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  color: var(--text);
+}
+.checkbox-row input {
+  margin: 0;
+}
 input[type="file"],
 input[type="text"],
 input[type="number"] {

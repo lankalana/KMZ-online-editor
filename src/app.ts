@@ -22,6 +22,13 @@ type WarpPreview = {
   east: number;
   west: number;
 };
+type ExportOverlay = {
+  href: string;
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+};
 
 type Projection = {
   forward: (ll: LatLng) => [number, number];
@@ -33,6 +40,8 @@ const EARTH_RADIUS_M = 6378137.0;
 // Normal output limits are derived from the source dimensions below.
 const MAX_SAFE_OUTPUT_DIM = 16_384;
 const MAX_SAFE_OUTPUT_PIXELS = 64_000_000;
+const GARMIN_MAX_TILE_PIXELS = 750_000;
+const GARMIN_JPEG_QUALITY = 0.9;
 const DEFAULT_REAL_CENTER: [number, number] = [64.5, 26.0];
 const DEFAULT_REAL_ZOOM = 5;
 
@@ -46,6 +55,7 @@ export class GeoreferenceController {
   private opacityInput = this.byId<HTMLInputElement>("opacityInput");
   private outputDimensionInput = this.byId<HTMLInputElement>("outputDimensionInput");
   private outputResolutionHint = this.byId<HTMLElement>("outputResolutionHint");
+  private garminModeInput = this.byId<HTMLInputElement>("garminModeInput");
   private previewOpacityInput = this.byId<HTMLInputElement>("previewOpacity");
   private previewOpacityValue = this.byId<HTMLElement>("previewOpacityValue");
   private resetAllBtn = this.byId<HTMLButtonElement>("resetAllBtn");
@@ -292,6 +302,7 @@ export class GeoreferenceController {
     this.overlayNameInput.value = "Image overlay";
     this.opacityInput.value = "85";
     this.outputDimensionInput.value = "";
+    this.garminModeInput.checked = false;
     this.updateOutputResolutionHint();
     this.previewOpacityInput.value = "85";
     this.previewOpacityValue.textContent = "85%";
@@ -375,7 +386,7 @@ export class GeoreferenceController {
       const data = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data }).promise;
       const page = await pdf.getPage(1);
-      const viewport = page.getViewport({ scale: 2.0 });
+      const viewport = page.getViewport({ scale: 4.0 });
       const canvas = document.createElement("canvas");
       canvas.width = Math.ceil(viewport.width);
       canvas.height = Math.ceil(viewport.height);
@@ -424,8 +435,10 @@ export class GeoreferenceController {
 
   private loadSourceCanvas(canvas: HTMLCanvasElement, info: ImportInfo = {}): void {
     const requestedOutputDimension = this.outputDimensionInput.value;
+    const garminMode = this.garminModeInput.checked;
     this.resetAll();
     this.outputDimensionInput.value = requestedOutputDimension;
+    this.garminModeInput.checked = garminMode;
     this.sourceCanvas = canvas;
     this.imageWidth = canvas.width;
     this.imageHeight = canvas.height;
@@ -1058,8 +1071,18 @@ export class GeoreferenceController {
     }
     try {
       const zip = new JSZip();
-      zip.file("overlay.png", this.previewCache.blob);
-      zip.file("doc.kml", this.buildKml());
+      let overlays: ExportOverlay[];
+      if (this.garminModeInput.checked) {
+        this.setStatus(
+          "Creating Garmin KMZ...",
+          "Encoding JPEG tiles at no more than 0.75 Mpx each.",
+        );
+        overlays = await this.addGarminTiles(zip);
+      } else {
+        zip.file("overlay.png", this.previewCache.blob);
+        overlays = [this.exportOverlay("overlay.png")];
+      }
+      zip.file("doc.kml", this.buildKml(overlays));
       const blob = await zip.generateAsync({ type: "blob" });
       const name = `${this.safeName(this.overlayNameInput.value || "overlay")}.kmz`;
       this.downloadBlob(blob, name);
@@ -1069,25 +1092,100 @@ export class GeoreferenceController {
     }
   }
 
-  private buildKml(): string {
+  private exportOverlay(href: string): ExportOverlay {
+    if (!this.previewCache) throw new Error("Missing preview.");
+    return {
+      href,
+      north: this.previewCache.north,
+      south: this.previewCache.south,
+      east: this.previewCache.east,
+      west: this.previewCache.west,
+    };
+  }
+
+  private async addGarminTiles(zip: JSZip): Promise<ExportOverlay[]> {
+    if (!this.previewCache) throw new Error("Missing preview.");
+    const preview = this.previewCache;
+    const image = await createImageBitmap(preview.blob);
+    const maxTileEdge = Math.floor(Math.sqrt(GARMIN_MAX_TILE_PIXELS));
+    const columns = Math.ceil(preview.width / maxTileEdge);
+    const rows = Math.ceil(preview.height / maxTileEdge);
+    const overlays: ExportOverlay[] = [];
+
+    try {
+      for (let row = 0; row < rows; row++) {
+        const y = row * maxTileEdge;
+        const height = Math.min(maxTileEdge, preview.height - y);
+        for (let column = 0; column < columns; column++) {
+          const x = column * maxTileEdge;
+          const width = Math.min(maxTileEdge, preview.width - x);
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const context = canvas.getContext("2d");
+          if (!context) throw new Error("Could not create Garmin tile canvas.");
+
+          // JPEG has no alpha channel. White makes transparent warp margins predictable.
+          context.fillStyle = "#ffffff";
+          context.fillRect(0, 0, width, height);
+          context.drawImage(image, x, y, width, height, 0, 0, width, height);
+
+          const blob = await new Promise<Blob>((resolve, reject) => {
+            canvas.toBlob(
+              (value) =>
+                value ? resolve(value) : reject(new Error("Could not encode Garmin JPEG tile.")),
+              "image/jpeg",
+              GARMIN_JPEG_QUALITY,
+            );
+          });
+          const href = `tiles/overlay_r${String(row + 1).padStart(3, "0")}_c${String(column + 1).padStart(3, "0")}.jpg`;
+          zip.file(href, blob);
+
+          const latitudeSpan = preview.north - preview.south;
+          const longitudeSpan = preview.east - preview.west;
+          overlays.push({
+            href,
+            north: preview.north - (y / preview.height) * latitudeSpan,
+            south: preview.north - ((y + height) / preview.height) * latitudeSpan,
+            west: preview.west + (x / preview.width) * longitudeSpan,
+            east: preview.west + ((x + width) / preview.width) * longitudeSpan,
+          });
+        }
+      }
+    } finally {
+      image.close();
+    }
+
+    return overlays;
+  }
+
+  private buildKml(overlays: ExportOverlay[]): string {
     if (!this.previewCache) throw new Error("Missing preview.");
     const alpha = Math.round((this.getOpacity() / 100) * 255)
       .toString(16)
       .padStart(2, "0");
     const name = this.escapeXml(this.overlayNameInput.value || "Image overlay");
+    const groundOverlays = overlays
+      .map(
+        (overlay, index) => `  <GroundOverlay>
+    <name>${name}${overlays.length > 1 ? ` ${index + 1}` : ""}</name>
+    <color>${alpha}ffffff</color>
+    <Icon><href>${this.escapeXml(overlay.href)}</href></Icon>
+    <LatLonBox>
+      <north>${overlay.north.toFixed(10)}</north>
+      <south>${overlay.south.toFixed(10)}</south>
+      <east>${overlay.east.toFixed(10)}</east>
+      <west>${overlay.west.toFixed(10)}</west>
+    </LatLonBox>
+  </GroundOverlay>`,
+      )
+      .join("\n");
     return `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
-  <GroundOverlay>
+  <Document>
     <name>${name}</name>
-    <color>${alpha}ffffff</color>
-    <Icon><href>overlay.png</href></Icon>
-    <LatLonBox>
-      <north>${this.previewCache.north.toFixed(10)}</north>
-      <south>${this.previewCache.south.toFixed(10)}</south>
-      <east>${this.previewCache.east.toFixed(10)}</east>
-      <west>${this.previewCache.west.toFixed(10)}</west>
-    </LatLonBox>
-  </GroundOverlay>
+${groundOverlays}
+  </Document>
 </kml>`;
   }
 

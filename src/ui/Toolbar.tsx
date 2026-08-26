@@ -38,6 +38,13 @@ export function Toolbar() {
             Auto uses the source resolution.
           </span>
         </label>
+        <label className="checkbox-field">
+          <span>Export mode</span>
+          <span className="checkbox-row">
+            <input id="garminModeInput" type="checkbox" />
+            Garmin (JPEG tiles, max 0.75 Mpx)
+          </span>
+        </label>
       </div>
       <div className="actions">
         <button id="resetAllBtn" type="button">
