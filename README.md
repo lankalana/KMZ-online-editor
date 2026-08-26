@@ -1,4 +1,4 @@
-# KMZ Control Point Tool — browser-only TypeScript
+# KMZ Control Point Tool — React + TypeScript
 
 Runs fully in the browser and can be deployed directly to GitHub Pages. No backend is required.
 
@@ -24,14 +24,29 @@ The production dependencies are installed through npm rather than loaded from CD
 
 Vite handles the TypeScript build, dependency bundling, PDF.js worker asset, CSS processing, and production minification.
 
+The interface is composed from focused React components in `src/ui`. The
+`GeoreferenceController` is an explicit integration boundary for Leaflet,
+canvas processing, and browser file APIs, keeping mutable third-party objects
+out of React's rendering lifecycle.
+
 ## Development
 
 Requires Node.js 22.
 
 ```bash
-npm install
-npm run dev
+aube install
+aube run dev
 ```
+
+Run the fast static-analysis and TypeScript checks with:
+
+```bash
+aube run format:check
+aube run lint
+aube run typecheck
+```
+
+Apply the project's formatting rules with `aube run format`.
 
 ## Production build
 

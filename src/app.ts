@@ -32,7 +32,10 @@ const MAX_OUTPUT_PIXELS = 16_000_000;
 const DEFAULT_REAL_CENTER: [number, number] = [64.5, 26.0];
 const DEFAULT_REAL_ZOOM = 5;
 
-class App {
+/** Imperative adapter for Leaflet, canvas and browser file APIs.
+ * React owns page composition; this controller owns mutable third-party objects.
+ */
+export class GeoreferenceController {
   private sourceInput = this.byId<HTMLInputElement>("sourceInput");
   private kmzInput = this.byId<HTMLInputElement>("kmzInput");
   private overlayNameInput = this.byId<HTMLInputElement>("overlayName");
@@ -117,35 +120,41 @@ class App {
       zoomDelta: 0.25,
       minZoom: -5,
       maxZoom: 8,
-      attributionControl: false
+      attributionControl: false,
     }).setView([0, 0], 0);
 
     this.realMap = L.map("realMap", {
       zoomSnap: 0.25,
-      zoomDelta: 0.25
+      zoomDelta: 0.25,
     }).setView(DEFAULT_REAL_CENTER, DEFAULT_REAL_ZOOM);
 
     this.previewMap = L.map("previewMap", {
       zoomSnap: 0.25,
-      zoomDelta: 0.25
+      zoomDelta: 0.25,
     }).setView(DEFAULT_REAL_CENTER, DEFAULT_REAL_ZOOM);
 
-    const topo = () => L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
-      maxZoom: 17,
-      attribution: "Map data © OpenStreetMap contributors, SRTM | Map style © OpenTopoMap"
-    });
-    const osm = () => L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution: "© OpenStreetMap contributors"
-    });
+    const topo = () =>
+      L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
+        maxZoom: 17,
+        attribution: "Map data © OpenStreetMap contributors, SRTM | Map style © OpenTopoMap",
+      });
+    const osm = () =>
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "© OpenStreetMap contributors",
+      });
 
     const realTopo = topo().addTo(this.realMap);
     const realOsm = osm();
-    L.control.layers({"Terrain / OpenTopoMap": realTopo, "OpenStreetMap": realOsm}).addTo(this.realMap);
+    L.control
+      .layers({ "Terrain / OpenTopoMap": realTopo, OpenStreetMap: realOsm })
+      .addTo(this.realMap);
 
     const previewTopo = topo().addTo(this.previewMap);
     const previewOsm = osm();
-    L.control.layers({"Terrain / OpenTopoMap": previewTopo, "OpenStreetMap": previewOsm}).addTo(this.previewMap);
+    L.control
+      .layers({ "Terrain / OpenTopoMap": previewTopo, OpenStreetMap: previewOsm })
+      .addTo(this.previewMap);
 
     this.previewSection.hidden = true;
     setTimeout(() => {
@@ -326,9 +335,16 @@ class App {
       const imported = await this.importKmz(file);
       this.loadSourceCanvas(imported.canvas, imported.info);
       if (imported.info.roughPairs && imported.info.roughPairs.length === 4) {
-        this.roughPairs = imported.info.roughPairs.map((p) => ({ ...p, image: { ...p.image }, map: { ...p.map } }));
+        this.roughPairs = imported.info.roughPairs.map((p) => ({
+          ...p,
+          image: { ...p.image },
+          map: { ...p.map },
+        }));
         this.finishRoughAlignment(true);
-        this.setStatus("KMZ imported.", "Rough alignment was seeded from the imported overlay corners. Refine points in step 2.");
+        this.setStatus(
+          "KMZ imported.",
+          "Rough alignment was seeded from the imported overlay corners. Refine points in step 2.",
+        );
       } else {
         this.setStatus("KMZ imported.", "Add or adjust rough points in step 1.");
       }
@@ -350,7 +366,7 @@ class App {
       canvas.height = Math.ceil(viewport.height);
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Could not create a canvas context.");
-      await page.render({ canvasContext: ctx, viewport }).promise;
+      await page.render({ canvas, canvasContext: ctx, viewport }).promise;
       return { canvas, name: file.name.replace(/\.pdf$/i, "") };
     }
 
@@ -404,14 +420,23 @@ class App {
 
     this.revokeSourceUrl();
     this.sourceImageUrl = canvas.toDataURL("image/png");
-    const bounds = [[0, 0], [Math.max(0, this.imageHeight - 1), Math.max(0, this.imageWidth - 1)]];
-    this.imageLayer = L.imageOverlay(this.sourceImageUrl, bounds as LatLngBoundsExpression, { interactive: false });
+    const bounds = [
+      [0, 0],
+      [Math.max(0, this.imageHeight - 1), Math.max(0, this.imageWidth - 1)],
+    ];
+    this.imageLayer = L.imageOverlay(this.sourceImageUrl, bounds as LatLngBoundsExpression, {
+      interactive: false,
+    });
     this.imageLayer.addTo(this.imageMap);
     this.imageMap.fitBounds(bounds, { padding: [20, 20] });
     this.realMap.setView(DEFAULT_REAL_CENTER, DEFAULT_REAL_ZOOM);
     this.step = 1;
     if (info.roughPairs) {
-      this.roughPairs = info.roughPairs.map((p) => ({ ...p, image: { ...p.image }, map: { ...p.map } }));
+      this.roughPairs = info.roughPairs.map((p) => ({
+        ...p,
+        image: { ...p.image },
+        map: { ...p.map },
+      }));
       const maxId = this.roughPairs.reduce((m, p) => Math.max(m, p.id), 0);
       this.nextPointId = maxId + 1;
     }
@@ -424,7 +449,7 @@ class App {
       className: "",
       html: `<div class="marker-pill ${kind}">${label}</div>`,
       iconSize: [24, 24],
-      iconAnchor: [12, 12]
+      iconAnchor: [12, 12],
     });
   }
 
@@ -448,11 +473,17 @@ class App {
     const hasSource = !!this.sourceCanvas;
     this.finishRoughBtn.disabled = !(hasSource && this.roughPairs.length === 4);
     this.undoRoughBtn.disabled = this.roughPairs.length === 0;
-    this.clearRoughBtn.disabled = this.roughPairs.length === 0 && !this.pendingRoughImage && !this.pendingRoughMap;
+    this.clearRoughBtn.disabled =
+      this.roughPairs.length === 0 && !this.pendingRoughImage && !this.pendingRoughMap;
     this.backToRoughBtn.disabled = !hasSource;
-    this.previewBtn.disabled = !(hasSource && this.roughHomography && this.precisePairs.length >= 5);
+    this.previewBtn.disabled = !(
+      hasSource &&
+      this.roughHomography &&
+      this.precisePairs.length >= 5
+    );
     this.undoPreciseBtn.disabled = this.precisePairs.length === 0;
-    this.clearPreciseBtn.disabled = this.precisePairs.length === 0 && !this.pendingPreciseImage && !this.pendingPreciseMap;
+    this.clearPreciseBtn.disabled =
+      this.precisePairs.length === 0 && !this.pendingPreciseImage && !this.pendingPreciseMap;
     this.downloadKmzBtn.disabled = !this.previewCache;
   }
 
@@ -468,8 +499,14 @@ class App {
 
   private renderRough(): void {
     this.clearMarkerArrays([this.roughImageMarkers, this.roughRealMarkers]);
-    if (this.pendingImageMarker) { this.pendingImageMarker.remove(); this.pendingImageMarker = null; }
-    if (this.pendingRealMarker) { this.pendingRealMarker.remove(); this.pendingRealMarker = null; }
+    if (this.pendingImageMarker) {
+      this.pendingImageMarker.remove();
+      this.pendingImageMarker = null;
+    }
+    if (this.pendingRealMarker) {
+      this.pendingRealMarker.remove();
+      this.pendingRealMarker = null;
+    }
     this.roughTableBody.innerHTML = "";
 
     for (let i = 0; i < this.roughPairs.length; i++) {
@@ -477,7 +514,7 @@ class App {
       const label = String(i + 1);
       const imageMarker = L.marker(this.imagePointToLeaflet(pair.image), {
         draggable: true,
-        icon: this.makeMarkerIcon(label, "rough")
+        icon: this.makeMarkerIcon(label, "rough"),
       }).addTo(this.imageMap);
       imageMarker.on("dragend", () => {
         const ll = imageMarker.getLatLng();
@@ -489,7 +526,7 @@ class App {
 
       const realMarker = L.marker([pair.map.lat, pair.map.lng], {
         draggable: true,
-        icon: this.makeMarkerIcon(label, "rough")
+        icon: this.makeMarkerIcon(label, "rough"),
       }).addTo(this.realMap);
       realMarker.on("dragend", () => {
         const ll = realMarker.getLatLng();
@@ -500,7 +537,8 @@ class App {
       this.roughRealMarkers.push(realMarker);
 
       const tr = document.createElement("tr");
-      tr.innerHTML = `<td>${i + 1}</td><td>${pair.image.x.toFixed(1)}</td><td>${pair.image.y.toFixed(1)}</td>` +
+      tr.innerHTML =
+        `<td>${i + 1}</td><td>${pair.image.x.toFixed(1)}</td><td>${pair.image.y.toFixed(1)}</td>` +
         `<td>${pair.map.lat.toFixed(6)}</td><td>${pair.map.lng.toFixed(6)}</td>`;
       const tdDelete = document.createElement("td");
       const btn = document.createElement("button");
@@ -518,12 +556,12 @@ class App {
 
     if (this.step === 1 && this.pendingRoughImage) {
       this.pendingImageMarker = L.marker(this.imagePointToLeaflet(this.pendingRoughImage), {
-        icon: this.makeMarkerIcon("•", "pending")
+        icon: this.makeMarkerIcon("•", "pending"),
       }).addTo(this.imageMap);
     }
     if (this.step === 1 && this.pendingRoughMap) {
       this.pendingRealMarker = L.marker([this.pendingRoughMap.lat, this.pendingRoughMap.lng], {
-        icon: this.makeMarkerIcon("•", "pending")
+        icon: this.makeMarkerIcon("•", "pending"),
       }).addTo(this.realMap);
     }
   }
@@ -537,7 +575,7 @@ class App {
       const label = String(i + 1);
       const imageMarker = L.marker(this.imagePointToLeaflet(pair.image), {
         draggable: true,
-        icon: this.makeMarkerIcon(label, "precise")
+        icon: this.makeMarkerIcon(label, "precise"),
       }).addTo(this.imageMap);
       imageMarker.on("dragend", () => {
         const ll = imageMarker.getLatLng();
@@ -549,7 +587,7 @@ class App {
 
       const realMarker = L.marker([pair.map.lat, pair.map.lng], {
         draggable: true,
-        icon: this.makeMarkerIcon(label, "precise")
+        icon: this.makeMarkerIcon(label, "precise"),
       }).addTo(this.realMap);
       realMarker.on("dragend", () => {
         const ll = realMarker.getLatLng();
@@ -560,7 +598,8 @@ class App {
       this.preciseRealMarkers.push(realMarker);
 
       const tr = document.createElement("tr");
-      tr.innerHTML = `<td>${i + 1}</td><td>${pair.image.x.toFixed(1)}</td><td>${pair.image.y.toFixed(1)}</td>` +
+      tr.innerHTML =
+        `<td>${i + 1}</td><td>${pair.image.x.toFixed(1)}</td><td>${pair.image.y.toFixed(1)}</td>` +
         `<td>${pair.map.lat.toFixed(6)}</td><td>${pair.map.lng.toFixed(6)}</td>`;
       const tdDelete = document.createElement("td");
       const btn = document.createElement("button");
@@ -582,17 +621,27 @@ class App {
     const point = this.leafletToImagePoint(ev.latlng);
     if (this.step === 1) {
       if (this.roughPairs.length >= 4) {
-        this.setStatus("Rough alignment already has 4 points.", "Move or delete a point, or finish rough alignment.");
+        this.setStatus(
+          "Rough alignment already has 4 points.",
+          "Move or delete a point, or finish rough alignment.",
+        );
         return;
       }
       this.pendingRoughImage = point;
       if (this.pendingRoughMap) {
-        this.roughPairs.push({ id: this.nextPointId++, image: this.pendingRoughImage, map: this.pendingRoughMap });
+        this.roughPairs.push({
+          id: this.nextPointId++,
+          image: this.pendingRoughImage,
+          map: this.pendingRoughMap,
+        });
         this.pendingRoughImage = null;
         this.pendingRoughMap = null;
         this.setStatus("Added rough point pair.", `${this.roughPairs.length}/4 rough pairs.`);
       } else {
-        this.setStatus("Image rough point selected.", "Click the corresponding location on the terrain map.");
+        this.setStatus(
+          "Image rough point selected.",
+          "Click the corresponding location on the terrain map.",
+        );
       }
       this.render();
       return;
@@ -601,13 +650,23 @@ class App {
     if (this.step === 2) {
       this.pendingPreciseImage = point;
       if (this.pendingPreciseMap) {
-        this.precisePairs.push({ id: this.nextPointId++, image: this.pendingPreciseImage, map: this.pendingPreciseMap });
+        this.precisePairs.push({
+          id: this.nextPointId++,
+          image: this.pendingPreciseImage,
+          map: this.pendingPreciseMap,
+        });
         this.pendingPreciseImage = null;
         this.pendingPreciseMap = null;
         this.invalidatePreview();
-        this.setStatus("Added precise point pair.", `${this.precisePairs.length} precise pairs. Minimum: 5.`);
+        this.setStatus(
+          "Added precise point pair.",
+          `${this.precisePairs.length} precise pairs. Minimum: 5.`,
+        );
       } else {
-        this.setStatus("Image precise point selected.", "Click the corresponding location on the terrain map.");
+        this.setStatus(
+          "Image precise point selected.",
+          "Click the corresponding location on the terrain map.",
+        );
       }
       this.render();
     }
@@ -618,17 +677,27 @@ class App {
     const point: LatLng = { lat: ev.latlng.lat, lng: ev.latlng.lng };
     if (this.step === 1) {
       if (this.roughPairs.length >= 4) {
-        this.setStatus("Rough alignment already has 4 points.", "Move or delete a point, or finish rough alignment.");
+        this.setStatus(
+          "Rough alignment already has 4 points.",
+          "Move or delete a point, or finish rough alignment.",
+        );
         return;
       }
       this.pendingRoughMap = point;
       if (this.pendingRoughImage) {
-        this.roughPairs.push({ id: this.nextPointId++, image: this.pendingRoughImage, map: this.pendingRoughMap });
+        this.roughPairs.push({
+          id: this.nextPointId++,
+          image: this.pendingRoughImage,
+          map: this.pendingRoughMap,
+        });
         this.pendingRoughImage = null;
         this.pendingRoughMap = null;
         this.setStatus("Added rough point pair.", `${this.roughPairs.length}/4 rough pairs.`);
       } else {
-        this.setStatus("Map rough point selected.", "Click the corresponding location on the image.");
+        this.setStatus(
+          "Map rough point selected.",
+          "Click the corresponding location on the image.",
+        );
       }
       this.render();
       return;
@@ -637,13 +706,23 @@ class App {
     if (this.step === 2) {
       this.pendingPreciseMap = point;
       if (this.pendingPreciseImage) {
-        this.precisePairs.push({ id: this.nextPointId++, image: this.pendingPreciseImage, map: this.pendingPreciseMap });
+        this.precisePairs.push({
+          id: this.nextPointId++,
+          image: this.pendingPreciseImage,
+          map: this.pendingPreciseMap,
+        });
         this.pendingPreciseImage = null;
         this.pendingPreciseMap = null;
         this.invalidatePreview();
-        this.setStatus("Added precise point pair.", `${this.precisePairs.length} precise pairs. Minimum: 5.`);
+        this.setStatus(
+          "Added precise point pair.",
+          `${this.precisePairs.length} precise pairs. Minimum: 5.`,
+        );
       } else {
-        this.setStatus("Map precise point selected.", "Click the corresponding location on the image.");
+        this.setStatus(
+          "Map precise point selected.",
+          "Click the corresponding location on the image.",
+        );
       }
       this.render();
     }
@@ -651,7 +730,11 @@ class App {
 
   private finishRoughAlignment(auto = false): void {
     if (this.roughPairs.length !== 4) {
-      this.setStatus("Rough alignment needs exactly 4 pairs.", "Add or adjust rough point pairs first.", true);
+      this.setStatus(
+        "Rough alignment needs exactly 4 pairs.",
+        "Add or adjust rough point pairs first.",
+        true,
+      );
       return;
     }
     try {
@@ -665,7 +748,10 @@ class App {
       this.step = 2;
       this.render();
       if (!auto) {
-        this.setStatus("Rough alignment finished.", "Image and terrain map are now linked. Add at least 5 precise point pairs.");
+        this.setStatus(
+          "Rough alignment finished.",
+          "Image and terrain map are now linked. Add at least 5 precise point pairs.",
+        );
       }
     } catch (error) {
       this.setStatus("Could not finish rough alignment.", String(error), true);
@@ -686,7 +772,7 @@ class App {
   private leafletToImagePoint(latlng: { lat: number; lng: number }): ImagePoint {
     return {
       x: latlng.lng,
-      y: Math.max(0, this.imageHeight - 1) - latlng.lat
+      y: Math.max(0, this.imageHeight - 1) - latlng.lat,
     };
   }
 
@@ -696,7 +782,7 @@ class App {
       this.leafletToImagePoint(this.imageMap.containerPointToLatLng([0, 0])),
       this.leafletToImagePoint(this.imageMap.containerPointToLatLng([size.x, 0])),
       this.leafletToImagePoint(this.imageMap.containerPointToLatLng([size.x, size.y])),
-      this.leafletToImagePoint(this.imageMap.containerPointToLatLng([0, size.y]))
+      this.leafletToImagePoint(this.imageMap.containerPointToLatLng([0, size.y])),
     ];
   }
 
@@ -706,7 +792,7 @@ class App {
       this.toLatLng(this.realMap.containerPointToLatLng([0, 0])),
       this.toLatLng(this.realMap.containerPointToLatLng([size.x, 0])),
       this.toLatLng(this.realMap.containerPointToLatLng([size.x, size.y])),
-      this.toLatLng(this.realMap.containerPointToLatLng([0, size.y]))
+      this.toLatLng(this.realMap.containerPointToLatLng([0, size.y])),
     ];
   }
 
@@ -729,7 +815,8 @@ class App {
   }
 
   private syncFromRealMap(): void {
-    if (this.step !== 2 || this.syncLock || !this.roughProjection || !this.roughHomographyInv) return;
+    if (this.step !== 2 || this.syncLock || !this.roughProjection || !this.roughHomographyInv)
+      return;
 
     const mappedCorners = this.realViewportCorners().map((point) => {
       const projected = this.roughProjection!.forward(point);
@@ -746,11 +833,18 @@ class App {
   private async generatePreview(): Promise<void> {
     if (!this.sourceCanvas) return;
     if (this.precisePairs.length < 5) {
-      this.setStatus("At least 5 precise point pairs are required.", "Add more points first.", true);
+      this.setStatus(
+        "At least 5 precise point pairs are required.",
+        "Add more points first.",
+        true,
+      );
       return;
     }
     try {
-      this.setStatus("Generating preview...", "Warping the image in the browser. This can take a while for larger images.");
+      this.setStatus(
+        "Generating preview...",
+        "Warping the image in the browser. This can take a while for larger images.",
+      );
       await new Promise((resolve) => requestAnimationFrame(resolve));
       this.invalidatePreview();
       this.previewCache = await this.buildWarpPreview();
@@ -771,7 +865,7 @@ class App {
     if (!this.previewCache) return;
     if (this.previewOverlay) this.previewMap.removeLayer(this.previewOverlay);
     this.previewOverlay = L.imageOverlay(this.previewCache.url, this.previewCache.bounds, {
-      opacity: this.getOpacity() / 100
+      opacity: this.getOpacity() / 100,
     }).addTo(this.previewMap);
   }
 
@@ -783,10 +877,18 @@ class App {
     const projection = this.makeLocalProjection(this.precisePairs.map((p) => p.map));
     const srcPts = this.precisePairs.map((p) => [p.image.x, p.image.y] as [number, number]);
     const dstPts = this.precisePairs.map((p) => projection.forward(p.map));
-    const forwardX = this.createThinPlateSpline(srcPts, dstPts.map((p) => p[0]));
-    const forwardY = this.createThinPlateSpline(srcPts, dstPts.map((p) => p[1]));
+    const forwardX = this.createThinPlateSpline(
+      srcPts,
+      dstPts.map((p) => p[0]),
+    );
+    const forwardY = this.createThinPlateSpline(
+      srcPts,
+      dstPts.map((p) => p[1]),
+    );
 
-    const boundary = this.imageBoundaryPoints(this.imageWidth, this.imageHeight, 80).map(([x, y]) => [forwardX.eval([x, y]), forwardY.eval([x, y])] as [number, number]);
+    const boundary = this.imageBoundaryPoints(this.imageWidth, this.imageHeight, 80).map(
+      ([x, y]) => [forwardX.eval([x, y]), forwardY.eval([x, y])] as [number, number],
+    );
     const xs = boundary.map((p) => p[0]);
     const ys = boundary.map((p) => p[1]);
     const minX = Math.min(...xs);
@@ -800,7 +902,12 @@ class App {
     const metersPerPixel = this.estimateMetersPerPixel(srcPts, dstPts);
     let outW = Math.max(2, Math.ceil(spanX / metersPerPixel));
     let outH = Math.max(2, Math.ceil(spanY / metersPerPixel));
-    const scale = Math.max(outW / MAX_OUTPUT_DIM, outH / MAX_OUTPUT_DIM, Math.sqrt((outW * outH) / MAX_OUTPUT_PIXELS), 1);
+    const scale = Math.max(
+      outW / MAX_OUTPUT_DIM,
+      outH / MAX_OUTPUT_DIM,
+      Math.sqrt((outW * outH) / MAX_OUTPUT_PIXELS),
+      1,
+    );
     outW = Math.max(2, Math.floor(outW / scale));
     outH = Math.max(2, Math.floor(outH / scale));
 
@@ -809,14 +916,20 @@ class App {
     for (let i = 0; i < outW; i++) xsGrid[i] = minX + (i / Math.max(1, outW - 1)) * spanX;
     for (let j = 0; j < outH; j++) ysGrid[j] = maxY - (j / Math.max(1, outH - 1)) * spanY;
 
-    const outXY: [number, number][] = new Array(outW * outH);
+    const outXY = Array.from<[number, number]>({ length: outW * outH });
     let k = 0;
     for (let j = 0; j < outH; j++) {
       for (let i = 0; i < outW; i++) outXY[k++] = [xsGrid[i], ysGrid[j]];
     }
 
-    const inverseX = this.createThinPlateSpline(dstPts, srcPts.map((p) => p[0]));
-    const inverseY = this.createThinPlateSpline(dstPts, srcPts.map((p) => p[1]));
+    const inverseX = this.createThinPlateSpline(
+      dstPts,
+      srcPts.map((p) => p[0]),
+    );
+    const inverseY = this.createThinPlateSpline(
+      dstPts,
+      srcPts.map((p) => p[1]),
+    );
 
     const sourceCtx = this.sourceCanvas!.getContext("2d", { willReadFrequently: true });
     if (!sourceCtx) throw new Error("Could not read source image.");
@@ -860,17 +973,24 @@ class App {
     return {
       blob,
       url: URL.createObjectURL(blob),
-      bounds: [[south, west], [north, east]],
+      bounds: [
+        [south, west],
+        [north, east],
+      ],
       north,
       south,
       east,
-      west
+      west,
     };
   }
 
   private async downloadKmz(): Promise<void> {
     if (!this.previewCache) {
-      this.setStatus("Generate a preview first.", "The preview image is also used for export.", true);
+      this.setStatus(
+        "Generate a preview first.",
+        "The preview image is also used for export.",
+        true,
+      );
       return;
     }
     try {
@@ -888,7 +1008,9 @@ class App {
 
   private buildKml(): string {
     if (!this.previewCache) throw new Error("Missing preview.");
-    const alpha = Math.round((this.getOpacity() / 100) * 255).toString(16).padStart(2, "0");
+    const alpha = Math.round((this.getOpacity() / 100) * 255)
+      .toString(16)
+      .padStart(2, "0");
     const name = this.escapeXml(this.overlayNameInput.value || "Image overlay");
     return `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
@@ -907,7 +1029,12 @@ class App {
   }
 
   private escapeXml(value: string): string {
-    return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;").replace(/'/g, "&apos;");
+    return value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&apos;");
   }
 
   private downloadBlob(blob: Blob, name: string): void {
@@ -932,15 +1059,15 @@ class App {
     const cosLat0 = Math.max(1e-9, Math.cos((lat0 * Math.PI) / 180));
     return {
       forward: (ll: LatLng): [number, number] => {
-        const x = EARTH_RADIUS_M * ((ll.lng - lng0) * Math.PI / 180) * cosLat0;
-        const y = EARTH_RADIUS_M * ((ll.lat - lat0) * Math.PI / 180);
+        const x = EARTH_RADIUS_M * (((ll.lng - lng0) * Math.PI) / 180) * cosLat0;
+        const y = EARTH_RADIUS_M * (((ll.lat - lat0) * Math.PI) / 180);
         return [x, y];
       },
       inverse: (xy: [number, number]): LatLng => {
-        const lng = lng0 + (xy[0] / (EARTH_RADIUS_M * cosLat0)) * 180 / Math.PI;
-        const lat = lat0 + (xy[1] / EARTH_RADIUS_M) * 180 / Math.PI;
+        const lng = lng0 + ((xy[0] / (EARTH_RADIUS_M * cosLat0)) * 180) / Math.PI;
+        const lat = lat0 + ((xy[1] / EARTH_RADIUS_M) * 180) / Math.PI;
         return { lat, lng };
-      }
+      },
     };
   }
 
@@ -960,7 +1087,7 @@ class App {
     return [
       [h[0], h[1], h[2]],
       [h[3], h[4], h[5]],
-      [h[6], h[7], 1]
+      [h[6], h[7], 1],
     ];
   }
 
@@ -982,7 +1109,7 @@ class App {
     return [
       [A / det, D / det, G / det],
       [B / det, E / det, H / det],
-      [C / det, F / det, I / det]
+      [C / det, F / det, I / det],
     ];
   }
 
@@ -1016,12 +1143,15 @@ class App {
     return m.map((row) => row[n]);
   }
 
-  private createThinPlateSpline(points: [number, number][], values: number[]): { eval: (p: [number, number]) => number } {
+  private createThinPlateSpline(
+    points: [number, number][],
+    values: number[],
+  ): { eval: (p: [number, number]) => number } {
     const n = points.length;
     if (n < 3) throw new Error("Thin-plate spline requires at least 3 points.");
     const size = n + 3;
-    const a: number[][] = Array.from({ length: size }, () => new Array(size).fill(0));
-    const b = new Array(size).fill(0);
+    const a: number[][] = Array.from({ length: size }, () => Array.from({ length: size }, () => 0));
+    const b = Array.from({ length: size }, () => 0);
 
     for (let i = 0; i < n; i++) {
       const [xi, yi] = points[i];
@@ -1054,7 +1184,7 @@ class App {
           value += weights[i] * this.tpsKernel(dx * dx + dy * dy);
         }
         return value;
-      }
+      },
     };
   }
 
@@ -1067,7 +1197,8 @@ class App {
     const points: [number, number][] = [];
     for (let i = 0; i < n; i++) points.push([((width - 1) * i) / Math.max(1, n - 1), 0]);
     for (let i = 0; i < n; i++) points.push([width - 1, ((height - 1) * i) / Math.max(1, n - 1)]);
-    for (let i = 0; i < n; i++) points.push([((width - 1) * (n - 1 - i)) / Math.max(1, n - 1), height - 1]);
+    for (let i = 0; i < n; i++)
+      points.push([((width - 1) * (n - 1 - i)) / Math.max(1, n - 1), height - 1]);
     for (let i = 0; i < n; i++) points.push([0, ((height - 1) * (n - 1 - i)) / Math.max(1, n - 1)]);
     return points;
   }
@@ -1086,7 +1217,13 @@ class App {
     return Math.max(1e-4, ratios[Math.floor(ratios.length / 2)]);
   }
 
-  private sampleBilinear(data: Uint8ClampedArray, width: number, height: number, x: number, y: number): [number, number, number, number] {
+  private sampleBilinear(
+    data: Uint8ClampedArray,
+    width: number,
+    height: number,
+    x: number,
+    y: number,
+  ): [number, number, number, number] {
     if (x < 0 || y < 0 || x > width - 1 || y > height - 1) return [0, 0, 0, 0];
     const x0 = Math.floor(x);
     const y0 = Math.floor(y);
@@ -1108,22 +1245,32 @@ class App {
     return out;
   }
 
-  private pixelAt(data: Uint8ClampedArray, width: number, x: number, y: number): [number, number, number, number] {
+  private pixelAt(
+    data: Uint8ClampedArray,
+    width: number,
+    x: number,
+    y: number,
+  ): [number, number, number, number] {
     const idx = (y * width + x) * 4;
     return [data[idx], data[idx + 1], data[idx + 2], data[idx + 3]];
   }
 
   private async importKmz(file: File): Promise<{ canvas: HTMLCanvasElement; info: ImportInfo }> {
     const zip = await JSZip.loadAsync(file);
-    const kmlNames = Object.keys(zip.files).filter((name: string) => name.toLowerCase().endsWith(".kml"));
+    const kmlNames = Object.keys(zip.files).filter((name: string) =>
+      name.toLowerCase().endsWith(".kml"),
+    );
     if (!kmlNames.length) throw new Error("KMZ does not contain a KML file.");
     const kmlText = await zip.file(kmlNames[0])!.async("string");
     const doc = new DOMParser().parseFromString(kmlText, "application/xml");
     const overlay = doc.querySelector("GroundOverlay");
     if (!overlay) throw new Error("No GroundOverlay found in KMZ.");
 
-    const name = overlay.querySelector("name")?.textContent?.trim() || file.name.replace(/\.kmz$/i, "");
-    const opacity = this.parseKmlOpacity(overlay.querySelector("color")?.textContent?.trim() || "ffffffff");
+    const name =
+      overlay.querySelector("name")?.textContent?.trim() || file.name.replace(/\.kmz$/i, "");
+    const opacity = this.parseKmlOpacity(
+      overlay.querySelector("color")?.textContent?.trim() || "ffffffff",
+    );
     const href = overlay.querySelector("Icon > href")?.textContent?.trim();
     if (!href) throw new Error("GroundOverlay image href not found.");
 
@@ -1133,7 +1280,11 @@ class App {
     const canvas = await this.fileToCanvas(imageBlob);
 
     const corners = this.parseOverlayCorners(overlay, canvas.width, canvas.height);
-    const roughPairs = corners.map((pair, idx) => ({ id: idx + 1, image: pair.image, map: pair.map }));
+    const roughPairs = corners.map((pair, idx) => ({
+      id: idx + 1,
+      image: pair.image,
+      map: pair.map,
+    }));
 
     return { canvas, info: { name, opacity, roughPairs } };
   }
@@ -1155,17 +1306,28 @@ class App {
     return Math.round((alpha / 255) * 100);
   }
 
-  private parseOverlayCorners(overlay: Element, width: number, height: number): { image: ImagePoint; map: LatLng }[] {
+  private parseOverlayCorners(
+    overlay: Element,
+    width: number,
+    height: number,
+  ): { image: ImagePoint; map: LatLng }[] {
     const quad = overlay.querySelector("gx\\:LatLonQuad, LatLonQuad");
     if (quad) {
       const text = quad.querySelector("coordinates")?.textContent?.trim() || "";
-      const coords = text.split(/\s+/).map((part) => part.split(",")).filter((parts) => parts.length >= 2).map((parts) => ({ lng: Number(parts[0]), lat: Number(parts[1]) }));
+      const coords = text
+        .split(/\s+/)
+        .map((part) => part.split(","))
+        .filter((parts) => parts.length >= 2)
+        .map((parts) => ({ lng: Number(parts[0]), lat: Number(parts[1]) }));
       if (coords.length >= 4) {
         return [
           { image: { x: 0, y: height - 1 }, map: { lat: coords[0].lat, lng: coords[0].lng } },
-          { image: { x: width - 1, y: height - 1 }, map: { lat: coords[1].lat, lng: coords[1].lng } },
+          {
+            image: { x: width - 1, y: height - 1 },
+            map: { lat: coords[1].lat, lng: coords[1].lng },
+          },
           { image: { x: width - 1, y: 0 }, map: { lat: coords[2].lat, lng: coords[2].lng } },
-          { image: { x: 0, y: 0 }, map: { lat: coords[3].lat, lng: coords[3].lng } }
+          { image: { x: 0, y: 0 }, map: { lat: coords[3].lat, lng: coords[3].lng } },
         ];
       }
     }
@@ -1177,31 +1339,33 @@ class App {
     const east = Number(box.querySelector("east")?.textContent);
     const west = Number(box.querySelector("west")?.textContent);
     const rotation = Number(box.querySelector("rotation")?.textContent || "0");
-    if (![north, south, east, west].every(Number.isFinite)) throw new Error("Invalid LatLonBox coordinates.");
+    if (![north, south, east, west].every(Number.isFinite))
+      throw new Error("Invalid LatLonBox coordinates.");
 
     const baseCorners = [
       { lat: south, lng: west },
       { lat: south, lng: east },
       { lat: north, lng: east },
-      { lat: north, lng: west }
+      { lat: north, lng: west },
     ];
-    const rotated = Math.abs(rotation) > 1e-12 ? this.rotateLatLonBox(baseCorners, rotation) : baseCorners;
+    const rotated =
+      Math.abs(rotation) > 1e-12 ? this.rotateLatLonBox(baseCorners, rotation) : baseCorners;
     return [
       { image: { x: 0, y: height - 1 }, map: rotated[0] },
       { image: { x: width - 1, y: height - 1 }, map: rotated[1] },
       { image: { x: width - 1, y: 0 }, map: rotated[2] },
-      { image: { x: 0, y: 0 }, map: rotated[3] }
+      { image: { x: 0, y: 0 }, map: rotated[3] },
     ];
   }
 
   private rotateLatLonBox(corners: LatLng[], rotationDeg: number): LatLng[] {
     const center = {
       lat: corners.reduce((sum, p) => sum + p.lat, 0) / corners.length,
-      lng: corners.reduce((sum, p) => sum + p.lng, 0) / corners.length
+      lng: corners.reduce((sum, p) => sum + p.lng, 0) / corners.length,
     };
     const projection = this.makeLocalProjection([center, center, center, center]);
     const centerXY = projection.forward(center);
-    const angle = rotationDeg * Math.PI / 180;
+    const angle = (rotationDeg * Math.PI) / 180;
     const cosA = Math.cos(angle);
     const sinA = Math.sin(angle);
     return corners.map((corner) => {
@@ -1214,7 +1378,3 @@ class App {
     });
   }
 }
-
-window.addEventListener("DOMContentLoaded", () => {
-  new App();
-});
