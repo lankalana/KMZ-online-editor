@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KMZ Control Point Tool</title>
+</head>
+<body>
+  <header>
+    <h1>KMZ Control Point Tool</h1>
+    <p>Browser-only georeferencing and KMZ export.</p>
+  </header>
+
+  <main>
+    <section class="toolbar card">
+      <div class="field-group">
+        <label>Source PDF / JPG / PNG
+          <input id="sourceInput" type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg">
+        </label>
+        <label>Import existing KMZ
+          <input id="kmzInput" type="file" accept=".kmz,application/vnd.google-earth.kmz">
+        </label>
+      </div>
+
+      <div class="field-group">
+        <label>Overlay name
+          <input id="overlayName" type="text" value="Image overlay">
+        </label>
+        <label>Preview / export opacity %
+          <input id="opacityInput" type="number" min="0" max="100" step="1" value="85">
+        </label>
+      </div>
+
+      <div class="actions">
+        <button id="resetAllBtn" type="button">Reset</button>
+      </div>
+    </section>
+
+    <section class="stepper card">
+      <div class="step" id="stepChip1">1. Rough alignment</div>
+      <div class="step" id="stepChip2">2. Precise control points</div>
+      <div class="step" id="stepChip3">3. Preview & export</div>
+    </section>
+
+    <section id="editorSection">
+      <div class="grid-two">
+        <section class="card pane">
+          <h2>Image view</h2>
+          <div id="imageMap" class="map"></div>
+        </section>
+        <section class="card pane">
+          <h2>Terrain map</h2>
+          <div id="realMap" class="map"></div>
+        </section>
+      </div>
+
+      <div class="grid-two lower-panels">
+        <section class="card panel" id="roughPanel">
+          <div class="panel-header">
+            <h3>Step 1: Rough alignment</h3>
+            <div class="actions compact">
+              <button id="finishRoughBtn" type="button" disabled>Finish rough alignment</button>
+            </div>
+          </div>
+          <p class="muted">Add exactly 4 rough point pairs. After that the image and map pan/zoom together. Imported KMZs prefill these points from overlay corners.</p>
+          <div class="point-actions">
+            <button id="undoRoughBtn" type="button" disabled>Undo rough pair</button>
+            <button id="clearRoughBtn" type="button" disabled>Clear rough points</button>
+          </div>
+          <table>
+            <thead>
+              <tr><th>#</th><th>x</th><th>y</th><th>lat</th><th>lon</th><th></th></tr>
+            </thead>
+            <tbody id="roughTableBody"></tbody>
+          </table>
+        </section>
+
+        <section class="card panel" id="precisePanel">
+          <div class="panel-header">
+            <h3>Step 2: Precise control points</h3>
+            <div class="actions compact">
+              <button id="backToRoughBtn" type="button">Edit rough alignment</button>
+              <button id="previewBtn" type="button" disabled>Generate preview</button>
+            </div>
+          </div>
+          <p class="muted">Add at least 5 precise point pairs. Existing points can be dragged on either map or deleted from the table.</p>
+          <div class="point-actions">
+            <button id="undoPreciseBtn" type="button" disabled>Undo precise pair</button>
+            <button id="clearPreciseBtn" type="button" disabled>Clear precise points</button>
+          </div>
+          <table>
+            <thead>
+              <tr><th>#</th><th>x</th><th>y</th><th>lat</th><th>lon</th><th></th></tr>
+            </thead>
+            <tbody id="preciseTableBody"></tbody>
+          </table>
+        </section>
+      </div>
+    </section>
+
+    <section id="previewSection" hidden>
+      <section class="card preview-controls">
+        <div class="panel-header">
+          <h3>Step 3: Preview overlay</h3>
+          <div class="actions compact">
+            <button id="backToPreciseBtn" type="button">Back to precise points</button>
+            <button id="downloadKmzBtn" type="button">Download KMZ</button>
+          </div>
+        </div>
+        <div class="preview-toolbar">
+          <label>Opacity %
+            <input id="previewOpacity" type="range" min="0" max="100" step="1" value="85">
+          </label>
+          <span id="previewOpacityValue">85%</span>
+        </div>
+      </section>
+      <section class="card pane">
+        <h2>Preview map</h2>
+        <div id="previewMap" class="map preview-map"></div>
+      </section>
+    </section>
+
+    <section class="card status-card">
+      <strong>Status</strong>
+      <div id="statusText">Load a source image/PDF or import a KMZ.</div>
+      <div id="statusDetail" class="muted"></div>
+    </section>
+  </main>
+
+  <script type="module" src="./src/app.ts"></script>
+</body>
+</html>

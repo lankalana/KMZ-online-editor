@@ -1,0 +1,184 @@
+:root {
+  color-scheme: light dark;
+  --bg: #0f1419;
+  --panel: #182028;
+  --panel-2: #1f2a34;
+  --border: #364351;
+  --text: #edf2f7;
+  --muted: #a5b0bb;
+  --accent: #4c8eda;
+  --accent-soft: #bcd8ff;
+  --warn: #ffb35b;
+  --danger: #ff8f8f;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.4 system-ui, sans-serif;
+}
+header {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--border);
+}
+header h1 { margin: 0 0 4px; font-size: 20px; }
+header p { margin: 0; color: var(--muted); }
+main { padding: 12px; display: grid; gap: 12px; }
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.toolbar {
+  padding: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  align-items: end;
+}
+.field-group {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+  min-width: 180px;
+}
+input, button {
+  font: inherit;
+}
+input[type="file"],
+input[type="text"],
+input[type="number"],
+input[type="range"] {
+  width: 100%;
+}
+input[type="file"],
+input[type="text"],
+input[type="number"] {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+}
+button {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  min-height: 36px;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: 0.45; cursor: default; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.actions.compact { justify-content: flex-end; }
+.stepper {
+  padding: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.step {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-align: center;
+  color: var(--muted);
+  background: var(--panel-2);
+}
+.step.active {
+  color: var(--text);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.step.done {
+  color: var(--accent-soft);
+}
+.grid-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.pane { overflow: hidden; }
+.pane h2 {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 15px;
+  border-bottom: 1px solid var(--border);
+}
+.map {
+  height: 520px;
+  background: #0a0f14;
+  cursor: crosshair;
+}
+.preview-map { height: 620px; }
+.leaflet-container { background: #0a0f14; }
+.lower-panels .panel { padding: 12px; }
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.panel-header h3 { margin: 0; font-size: 15px; }
+.muted { color: var(--muted); }
+.point-actions,
+.preview-toolbar {
+  display: flex;
+  gap: 8px 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+th, td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+  white-space: nowrap;
+  font-size: 12px;
+}
+th:first-child, td:first-child { text-align: center; }
+th:last-child, td:last-child { text-align: center; }
+.status-card { padding: 12px; }
+#statusText { margin-top: 6px; }
+#statusText.error { color: var(--danger); }
+.preview-controls { padding: 12px; }
+.marker-pill {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 2px solid #111;
+  font-weight: 700;
+  color: #111;
+}
+.marker-pill.rough { background: var(--warn); }
+.marker-pill.precise { background: #ffe14d; }
+.marker-pill.pending { background: #ff7a7a; }
+.text-button {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 8px;
+  min-height: 0;
+}
+@media (max-width: 1000px) {
+  .grid-two { grid-template-columns: 1fr; }
+  .map { height: 420px; }
+  .preview-map { height: 500px; }
+  .stepper { grid-template-columns: 1fr; }
+}
