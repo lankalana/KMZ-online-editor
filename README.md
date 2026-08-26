@@ -11,7 +11,9 @@ Runs fully in the browser and can be deployed directly to GitHub Pages. No backe
 - Linked image/map pan and zoom after rough alignment.
 - Draggable and deletable control points.
 - Step 3: preview the warped overlay on the map with a live opacity slider.
+- Source-aware KMZ output resolution, with an optional maximum-dimension override.
 - Browser-side KMZ generation.
+- Optional Garmin export mode using only JPEG raster tiles of at most 0.75 Mpx each.
 - Imported `LatLonBox`, rotated `LatLonBox`, and `gx:LatLonQuad` overlays seed step 1 from the image corners.
 
 ## Stack
@@ -21,6 +23,16 @@ The production dependencies are installed through npm rather than loaded from CD
 - Leaflet — map and image interaction.
 - JSZip — KMZ import/export.
 - PDF.js (`pdfjs-dist`) — first-page PDF rasterization.
+
+The warped PNG resolution is calculated from the overlay extent and control-point scale. It is
+capped at the loaded source resolution (including the rasterized PDF page), so export never
+invents detail by upscaling. The optional **Max output dimension** setting can be used to make a
+smaller export. Very large sources are additionally constrained by browser canvas and memory
+safety limits.
+
+Garmin mode divides the warped overlay into a grid of JPEG files, each safely below Garmin's
+1 Mpx image limit, and creates a separate correctly positioned KML ground overlay for every tile.
+The standard export remains a single PNG overlay.
 
 Vite handles the TypeScript build, dependency bundling, PDF.js worker asset, CSS processing, and production minification.
 

@@ -24,6 +24,27 @@ export function Toolbar() {
           Preview / export opacity %
           <input id="opacityInput" type="number" min="0" max="100" step="1" defaultValue="85" />
         </label>
+        <label>
+          Max output dimension (px)
+          <input
+            id="outputDimensionInput"
+            type="number"
+            min="2"
+            step="1"
+            placeholder="Auto (source resolution)"
+            aria-describedby="outputResolutionHint"
+          />
+          <span id="outputResolutionHint" className="field-hint">
+            Auto uses the source resolution.
+          </span>
+        </label>
+        <label className="checkbox-field">
+          <span>Export mode</span>
+          <span className="checkbox-row">
+            <input id="garminModeInput" type="checkbox" />
+            Garmin (JPEG tiles, max 0.75 Mpx)
+          </span>
+        </label>
       </div>
       <div className="actions">
         <button id="resetAllBtn" type="button">

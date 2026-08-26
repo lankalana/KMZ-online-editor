@@ -62,6 +62,9 @@ function Preview() {
             <button id="backToPreciseBtn" type="button">
               Back to precise points
             </button>
+            <button id="regeneratePreviewBtn" type="button">
+              Regenerate preview
+            </button>
             <button id="downloadKmzBtn" type="button">
               Download KMZ
             </button>
