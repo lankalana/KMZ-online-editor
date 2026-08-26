@@ -14,6 +14,8 @@ type ImportInfo = { name?: string; opacity?: number; roughPairs?: PointPair[] };
 type WarpPreview = {
   blob: Blob;
   url: string;
+  width: number;
+  height: number;
   bounds: [[number, number], [number, number]];
   north: number;
   south: number;
@@ -27,8 +29,10 @@ type Projection = {
 };
 
 const EARTH_RADIUS_M = 6378137.0;
-const MAX_OUTPUT_DIM = 4096;
-const MAX_OUTPUT_PIXELS = 16_000_000;
+// Keep very large sources from exceeding practical browser canvas/memory limits.
+// Normal output limits are derived from the source dimensions below.
+const MAX_SAFE_OUTPUT_DIM = 16_384;
+const MAX_SAFE_OUTPUT_PIXELS = 64_000_000;
 const DEFAULT_REAL_CENTER: [number, number] = [64.5, 26.0];
 const DEFAULT_REAL_ZOOM = 5;
 
@@ -40,6 +44,8 @@ export class GeoreferenceController {
   private kmzInput = this.byId<HTMLInputElement>("kmzInput");
   private overlayNameInput = this.byId<HTMLInputElement>("overlayName");
   private opacityInput = this.byId<HTMLInputElement>("opacityInput");
+  private outputDimensionInput = this.byId<HTMLInputElement>("outputDimensionInput");
+  private outputResolutionHint = this.byId<HTMLElement>("outputResolutionHint");
   private previewOpacityInput = this.byId<HTMLInputElement>("previewOpacity");
   private previewOpacityValue = this.byId<HTMLElement>("previewOpacityValue");
   private resetAllBtn = this.byId<HTMLButtonElement>("resetAllBtn");
@@ -52,6 +58,7 @@ export class GeoreferenceController {
   private undoPreciseBtn = this.byId<HTMLButtonElement>("undoPreciseBtn");
   private clearPreciseBtn = this.byId<HTMLButtonElement>("clearPreciseBtn");
   private backToPreciseBtn = this.byId<HTMLButtonElement>("backToPreciseBtn");
+  private regeneratePreviewBtn = this.byId<HTMLButtonElement>("regeneratePreviewBtn");
   private downloadKmzBtn = this.byId<HTMLButtonElement>("downloadKmzBtn");
 
   private editorSection = this.byId<HTMLElement>("editorSection");
@@ -178,6 +185,11 @@ export class GeoreferenceController {
       this.previewOpacityValue.textContent = `${this.previewOpacityInput.value}%`;
       if (this.previewOverlay) this.previewOverlay.setOpacity(this.getOpacity() / 100);
     });
+    this.outputDimensionInput.addEventListener("input", () => {
+      this.updateOutputResolutionHint();
+      this.invalidatePreview();
+      this.render();
+    });
     this.resetAllBtn.addEventListener("click", () => this.resetAll());
 
     this.finishRoughBtn.addEventListener("click", () => this.finishRoughAlignment());
@@ -225,6 +237,7 @@ export class GeoreferenceController {
       this.invalidateSizes();
       this.render();
     });
+    this.regeneratePreviewBtn.addEventListener("click", () => void this.generatePreview());
     this.downloadKmzBtn.addEventListener("click", () => void this.downloadKmz());
 
     this.imageMap.on("click", (ev: any) => this.handleImageMapClick(ev));
@@ -278,6 +291,8 @@ export class GeoreferenceController {
     this.editorSection.hidden = false;
     this.overlayNameInput.value = "Image overlay";
     this.opacityInput.value = "85";
+    this.outputDimensionInput.value = "";
+    this.updateOutputResolutionHint();
     this.previewOpacityInput.value = "85";
     this.previewOpacityValue.textContent = "85%";
     this.sourceInput.value = "";
@@ -408,10 +423,13 @@ export class GeoreferenceController {
   }
 
   private loadSourceCanvas(canvas: HTMLCanvasElement, info: ImportInfo = {}): void {
+    const requestedOutputDimension = this.outputDimensionInput.value;
     this.resetAll();
+    this.outputDimensionInput.value = requestedOutputDimension;
     this.sourceCanvas = canvas;
     this.imageWidth = canvas.width;
     this.imageHeight = canvas.height;
+    this.updateOutputResolutionHint();
     this.overlayNameInput.value = info.name ?? "Image overlay";
     const opacity = Math.max(0, Math.min(100, Math.round(info.opacity ?? 85)));
     this.opacityInput.value = String(opacity);
@@ -484,6 +502,11 @@ export class GeoreferenceController {
     this.undoPreciseBtn.disabled = this.precisePairs.length === 0;
     this.clearPreciseBtn.disabled =
       this.precisePairs.length === 0 && !this.pendingPreciseImage && !this.pendingPreciseMap;
+    this.regeneratePreviewBtn.disabled = !(
+      hasSource &&
+      this.roughHomography &&
+      this.precisePairs.length >= 5
+    );
     this.downloadKmzBtn.disabled = !this.previewCache;
   }
 
@@ -860,7 +883,10 @@ export class GeoreferenceController {
       this.previewMap.fitBounds(this.previewCache.bounds, { padding: [20, 20] });
       this.invalidateSizes();
       this.render();
-      this.setStatus("Preview ready.", "Adjust opacity if needed, then download the KMZ.");
+      this.setStatus(
+        "Preview ready.",
+        `${this.previewCache.width} × ${this.previewCache.height} px. Adjust opacity if needed, then download the KMZ.`,
+      );
     } catch (error) {
       this.setStatus("Could not generate preview.", String(error), true);
     }
@@ -907,10 +933,18 @@ export class GeoreferenceController {
     const metersPerPixel = this.estimateMetersPerPixel(srcPts, dstPts);
     let outW = Math.max(2, Math.ceil(spanX / metersPerPixel));
     let outH = Math.max(2, Math.ceil(spanY / metersPerPixel));
+    const sourceMaxDimension = Math.max(this.imageWidth, this.imageHeight);
+    const requestedMaxDimension = this.getRequestedMaxOutputDimension();
+    const maxOutputDimension = Math.min(
+      requestedMaxDimension ?? sourceMaxDimension,
+      sourceMaxDimension,
+      MAX_SAFE_OUTPUT_DIM,
+    );
+    const maxOutputPixels = Math.min(this.imageWidth * this.imageHeight, MAX_SAFE_OUTPUT_PIXELS);
     const scale = Math.max(
-      outW / MAX_OUTPUT_DIM,
-      outH / MAX_OUTPUT_DIM,
-      Math.sqrt((outW * outH) / MAX_OUTPUT_PIXELS),
+      outW / maxOutputDimension,
+      outH / maxOutputDimension,
+      Math.sqrt((outW * outH) / maxOutputPixels),
       1,
     );
     outW = Math.max(2, Math.floor(outW / scale));
@@ -978,6 +1012,8 @@ export class GeoreferenceController {
     return {
       blob,
       url: URL.createObjectURL(blob),
+      width: outW,
+      height: outH,
       bounds: [
         [south, west],
         [north, east],
@@ -987,6 +1023,28 @@ export class GeoreferenceController {
       east,
       west,
     };
+  }
+
+  private getRequestedMaxOutputDimension(): number | null {
+    const value = this.outputDimensionInput.value.trim();
+    if (!value) return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.max(2, Math.floor(parsed)) : null;
+  }
+
+  private updateOutputResolutionHint(): void {
+    if (!(this.imageWidth > 0 && this.imageHeight > 0)) {
+      this.outputResolutionHint.textContent = "Auto uses the source resolution.";
+      return;
+    }
+    const sourceMax = Math.max(this.imageWidth, this.imageHeight);
+    const requested = this.getRequestedMaxOutputDimension();
+    const effectiveMax = Math.min(requested ?? sourceMax, sourceMax, MAX_SAFE_OUTPUT_DIM);
+    const safetyLimited =
+      sourceMax > MAX_SAFE_OUTPUT_DIM ||
+      this.imageWidth * this.imageHeight > MAX_SAFE_OUTPUT_PIXELS;
+    const mode = requested === null ? "Auto" : "Override";
+    this.outputResolutionHint.textContent = `${mode}: up to ${effectiveMax.toLocaleString()} px; source ${this.imageWidth.toLocaleString()} × ${this.imageHeight.toLocaleString()} px${safetyLimited ? " (browser safety limit applies)" : ""}.`;
   }
 
   private async downloadKmz(): Promise<void> {

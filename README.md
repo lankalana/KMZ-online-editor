@@ -11,6 +11,7 @@ Runs fully in the browser and can be deployed directly to GitHub Pages. No backe
 - Linked image/map pan and zoom after rough alignment.
 - Draggable and deletable control points.
 - Step 3: preview the warped overlay on the map with a live opacity slider.
+- Source-aware KMZ output resolution, with an optional maximum-dimension override.
 - Browser-side KMZ generation.
 - Imported `LatLonBox`, rotated `LatLonBox`, and `gx:LatLonQuad` overlays seed step 1 from the image corners.
 
@@ -21,6 +22,12 @@ The production dependencies are installed through npm rather than loaded from CD
 - Leaflet — map and image interaction.
 - JSZip — KMZ import/export.
 - PDF.js (`pdfjs-dist`) — first-page PDF rasterization.
+
+The warped PNG resolution is calculated from the overlay extent and control-point scale. It is
+capped at the loaded source resolution (including the rasterized PDF page), so export never
+invents detail by upscaling. The optional **Max output dimension** setting can be used to make a
+smaller export. Very large sources are additionally constrained by browser canvas and memory
+safety limits.
 
 Vite handles the TypeScript build, dependency bundling, PDF.js worker asset, CSS processing, and production minification.
 

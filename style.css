@@ -63,6 +63,11 @@ label {
   color: var(--muted);
   min-width: 180px;
 }
+.field-hint {
+  max-width: 240px;
+  font-size: 12px;
+  color: var(--muted);
+}
 input,
 button {
   font: inherit;
